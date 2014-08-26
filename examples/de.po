@@ -1,0 +1,5 @@
+msgid "This is a test."
+msgstr "Dies ist ein test."
+
+msgid "Hello, %s!"
+msgstr "Hallo, %s!"
