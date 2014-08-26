@@ -2,7 +2,6 @@
 
 -- for PrintfType instance
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS -fno-warn-orphans #-}
 
 module Text.Blaze.I18n
   ( i18n, localizeMarkup
@@ -21,13 +20,19 @@ import Text.I18n.Printf
 
 -- | Create a HTML tag marked for localization
 i18n
-  :: PrintfType r
+  :: I18nType r
   => String   -- ^ Message ID
   -> r
-i18n msgid = spr msgid []
+i18n msgid = spr_i18n msgid []
 
-instance PrintfType (MarkupM ()) where
-  spr msgid args = customParent "blaze-html-i18n-tag" $ do
+class I18nType a where
+  spr_i18n :: String -> [UPrintf] -> a
+
+instance (PrintfArg a, I18nType r) => I18nType (a -> r) where
+  spr_i18n fmt args = \a -> spr_i18n fmt (args ++ [toUPrintf a])
+
+instance I18nType (MarkupM ()) where
+  spr_i18n msgid args = customParent "blaze-html-i18n-tag" $ do
     customParent "msg-id" $ string msgid
     forM_ args $ \arg ->
       case arg of
@@ -69,17 +74,17 @@ localizeParent _ _ m = m
 uprintfsOf :: MarkupM a -> [UPrintf]
 uprintfsOf m = case m of
   CustomParent _ c
-    | Just u <- toUPrintf m -> [u]
-    | otherwise             -> uprintfsOf c
-  Content (String s)        -> [UString s]
-  Append c1 c2              -> uprintfsOf c1 ++ uprintfsOf c2
-  Parent _ _ _ c            -> uprintfsOf c
-  AddAttribute _ _ _ c      -> uprintfsOf c
-  AddCustomAttribute _ _ c  -> uprintfsOf c
-  _                         -> []
+    | Just u <- tagToUPrintf m  -> [u]
+    | otherwise                 -> uprintfsOf c
+  Content (String s)            -> [UString s]
+  Append c1 c2                  -> uprintfsOf c1 ++ uprintfsOf c2
+  Parent _ _ _ c                -> uprintfsOf c
+  AddAttribute _ _ _ c          -> uprintfsOf c
+  AddCustomAttribute _ _ c      -> uprintfsOf c
+  _                             -> []
 
-toUPrintf :: MarkupM a -> Maybe UPrintf
-toUPrintf m@(CustomParent _ c)
+tagToUPrintf :: MarkupM a -> Maybe UPrintf
+tagToUPrintf m@(CustomParent _ c)
 
   | isChar m
   , Content (String [ch]) <- c
@@ -101,7 +106,7 @@ toUPrintf m@(CustomParent _ c)
   , Content (String d) <- c
   = Just $ UDouble (read d)
 
-toUPrintf _ = Nothing
+tagToUPrintf _ = Nothing
 
 localizeMarkup :: L10n -> Locale -> Markup -> Markup
 localizeMarkup ln lc mu = go mu
