@@ -23,7 +23,7 @@ main = do
     (_, err) -> "Errors loading po file: " ++ show err
 
 html :: H.Html
-html = H.docTypeHtml $ do
+html = H.docTypeHtml $ H.body $ do
 
   i18nContext "title" $ do
 
