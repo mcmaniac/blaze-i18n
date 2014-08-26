@@ -4,11 +4,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Text.Blaze.I18n
-  ( i18n, localizeMarkup
+  ( i18n, I18nType
+  , i18nContext
+  , localizeMarkup
   ) where
 
 import Data.Foldable as F
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 -- blaze package
 import Text.Blaze
@@ -24,6 +26,13 @@ i18n
   => String   -- ^ Message ID
   -> r
 i18n msgid = spr_i18n msgid []
+
+i18nContext :: String -> Markup -> Markup
+i18nContext ctxt =
+  customParent "blaze-html-i18n-context" ! customAttribute "value" (toValue ctxt)
+
+--------------------------------------------------------------------------------
+-- "printf" type for i18n
 
 class I18nType a where
   spr_i18n :: String -> [UPrintf] -> a
@@ -49,10 +58,11 @@ isCustomParent :: Text -> MarkupM a -> Bool
 isCustomParent t (CustomParent (Static (StaticString _ _ c)) _) = c == t
 isCustomParent _ _ = False
 
-isParent, isMsgId :: MarkupM a -> Bool
+isParent, isContext, isMsgId :: MarkupM a -> Bool
 
-isParent = isCustomParent "blaze-html-i18n-tag"
-isMsgId  = isCustomParent "msg-id"
+isParent  = isCustomParent "blaze-html-i18n-tag"
+isContext = isCustomParent "blaze-html-i18n-context"
+isMsgId   = isCustomParent "msg-id"
 
 isChar, isString, isInteger, isFloat, isDouble :: MarkupM a -> Bool
 
@@ -62,14 +72,17 @@ isInteger = isCustomParent "integer"
 isFloat   = isCustomParent "float"
 isDouble  = isCustomParent "double"
 
-localizeParent :: L10n -> Locale -> MarkupM a -> MarkupM a
-localizeParent ln lc m
+localizeParent :: L10n -> Locale -> Maybe Context -> MarkupM a -> MarkupM a
+localizeParent ln lc ctxt m
+
   | isParent m
   , CustomParent _ (Append c1 c2) <- m
   , isMsgId c1
   , CustomParent _ (Content (String msgid)) <- c1
-  = Content . String $ localize ln lc $ gettext' msgid (uprintfsOf c2)
-localizeParent _ _ m = m
+  = Content . String $ localize ln lc $
+    withContext ctxt $ gettext' msgid (uprintfsOf c2)
+
+localizeParent _ _ _ m = m
 
 uprintfsOf :: MarkupM a -> [UPrintf]
 uprintfsOf m = case m of
@@ -109,15 +122,35 @@ tagToUPrintf m@(CustomParent _ c)
 tagToUPrintf _ = Nothing
 
 localizeMarkup :: L10n -> Locale -> Markup -> Markup
-localizeMarkup ln lc mu = go mu
+localizeMarkup ln lc mu = go Nothing mu
  where
-  go :: MarkupM a -> MarkupM a
-  go m
-    | isParent m = localizeParent ln lc m
+  go :: Maybe Context -> MarkupM a -> MarkupM a
+  go ctxt m
+
+    | isParent m = localizeParent ln lc ctxt m
+
+    | AddCustomAttribute (Static (StaticString _ _ _)) (String val) c <- m
+    , isContext c
+    , CustomParent _ m' <- c
+    = go (Just val) (mv m')
+
     | otherwise = case m of
-      Append             a b      -> Append (go a) (go b)
-      Parent             a b c d  -> Parent a b c (go d)
-      CustomParent       a b      -> CustomParent a (go b)
-      AddAttribute       a b c d  -> AddAttribute a b c (go d)
-      AddCustomAttribute a b c    -> AddCustomAttribute a b (go c)
+      Append             a b      -> Append (go ctxt a) (go ctxt b)
+      Parent             a b c d  -> Parent a b c (go ctxt d)
+      CustomParent       a b      -> CustomParent a (go ctxt b)
+      AddAttribute       a b c d  -> AddAttribute a b c (go ctxt d)
+      AddCustomAttribute a b c    -> AddCustomAttribute a b (go ctxt c)
       _                           -> m
+
+  -- just move the types around
+  mv :: MarkupM a -> MarkupM b
+  mv m = case m of
+    Append a b                -> Append a b
+    Parent a b c d            -> Parent a b c d
+    CustomParent a b          -> CustomParent a b
+    Leaf a b c                -> Leaf a b c
+    CustomLeaf a b            -> CustomLeaf a b
+    Empty                     -> Empty
+    Content a                 -> Content a
+    AddAttribute a b c d      -> AddAttribute a b c (mv d)
+    AddCustomAttribute a b c  -> AddCustomAttribute a b (mv c)
