@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Text.Blaze.I18n where
+module Text.Blaze.I18n
+  ( i18n, localizeMarkup
+  ) where
 
-import Data.List
-import Data.Foldable
+import Data.Foldable as F
 
 -- blaze package
 import Text.Blaze
-import Text.Blaze.Internal
-import Text.Blaze.Renderer.String
+import Text.Blaze.Internal hiding (null)
 
 -- i18n package
 import Text.I18n
@@ -30,17 +30,13 @@ isMsgId :: MarkupM a -> Bool
 isMsgId (CustomParent (Static (StaticString _ _ c)) _) = c == "msg-id"
 isMsgId _ = False
 
-msgId :: MarkupM a -> Maybe String
-msgId m@(CustomParent _ (Content (String s))) = Just s
-msgId _ = Nothing
-
 localizeParent :: L10n -> Locale -> MarkupM a -> MarkupM a
-localizeParent l10 loc m
+localizeParent ln lc m
   | isParent m
   , CustomParent _ (Append c1 c2) <- m
   , isMsgId c1
-  , CustomParent _ (Content (String s)) <- c1
-  = Content . String $ s ++ "(" ++ intercalate ", " (stringsOf c2) ++ ")"
+  , CustomParent _ (Content (String msgid)) <- c1
+  = Content . String $ localize ln lc $ gettext' msgid (stringsOf c2)
 localizeParent _ _ m = m
 
 stringsOf :: MarkupM a -> [String]
@@ -54,70 +50,15 @@ stringsOf m = case m of
   _                         -> []
 
 localizeMarkup :: L10n -> Locale -> Markup -> Markup
-localizeMarkup _ _ _ = undefined
-
-l10n :: L10n
-l10n = undefined
-
-loc :: Locale
-loc = Locale "de"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- | Render some 'Markup' to an appending 'String'.
-renderString' :: MarkupM a  -- ^ Markup to render
-              -> String     -- ^ String to append
-              -> String     -- ^ Resulting String
-renderString' = go 0 id
-  where
-    go :: Int -> (String -> String) -> MarkupM b -> String -> String
-    go i attrs (Parent _ open close content) =
-        ind i . getString open . attrs . (">\n" ++) . go (inc i) id content
-              . ind i . getString close .  ('\n' :)
-    go i attrs (CustomParent tag content) =
-        ind i . ('<' :) . fromChoiceString tag . attrs . (">\n" ++) .
-        go (inc i) id content . ind i . ("</" ++) . fromChoiceString tag .
-        (">\n" ++)
-    go i attrs (Leaf _ begin end) =
-        ind i . getString begin . attrs . getString end . ('\n' :)
-    go i attrs (CustomLeaf tag close) =
-        ind i . ('<' :) . fromChoiceString tag . attrs .
-        ((if close then " />\n" else ">\n") ++)
-    go i attrs (AddAttribute _ key value h) = flip (go i) h $
-        getString key . fromChoiceString value . ('"' :) . attrs
-    go i attrs (AddCustomAttribute key value h) = flip (go i) h $
-        (' ' : ) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
-        ('"' :) .  attrs
-    go i _ (Content content) = ind i . fromChoiceString content . ('\n' :)
-    go i attrs (Append h1 h2) = go i attrs h1 . go i attrs h2
-    go _ _ Empty = id
-    {-# NOINLINE go #-}
-
-    -- Increase the indentation
-    inc = (+) 4
-
-    -- Produce appending indentation
-    ind i = (replicate i ' ' ++)
-{-# INLINE renderString' #-}
+localizeMarkup ln lc mu = go mu
+ where
+  go :: MarkupM a -> MarkupM a
+  go m
+    | isParent m = localizeParent ln lc m
+    | otherwise = case m of
+      Append             a b      -> Append (go a) (go b)
+      Parent             a b c d  -> Parent a b c (go d)
+      CustomParent       a b      -> CustomParent a (go b)
+      AddAttribute       a b c d  -> AddAttribute a b c (go d)
+      AddCustomAttribute a b c    -> AddCustomAttribute a b (go c)
+      _                           -> m
