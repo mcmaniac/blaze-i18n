@@ -21,6 +21,6 @@ library
   other-modules:       
   hs-source-dirs:      src
   default-language:    Haskell2010
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base >=4.7 && <4.8, text,
                        blaze-markup,
                        i18n >= 0.3.1

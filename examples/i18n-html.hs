@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 import Text.I18n
 import Text.I18n.Po hiding (putStrLn)
 import Text.Blaze.I18n
@@ -27,5 +25,5 @@ main = do
 html :: H.Html
 html = H.docTypeHtml $ do
 
-  H.h1 $ i18n "Hello, %s!" ["Joe"]
-  H.p  $ i18n "This is a test." []
+  H.h1 $ i18n "Hello, %s!" "Joe"
+  H.p  $ i18n "This is a test."
