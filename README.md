@@ -1,6 +1,6 @@
 Internationalization support for the blaze-markup package.
 
-See `examples` for examples:
+See `examples/`:
 
     λ nils@nils.cc. cd examples/
     λ nils@nils.cc. LANG="de" runghc i18n-html.hs           
