@@ -25,5 +25,10 @@ main = do
 html :: H.Html
 html = H.docTypeHtml $ do
 
-  H.h1 $ i18n "Hello, %s!" "Joe"
-  H.p  $ i18n "This is a test."
+  i18nContext "title" $ do
+
+    H.h1 $ i18n "Hello, %s!" "Joe"
+
+  i18nContext "body" $ do
+
+    H.p  $ i18n "This is a test."
