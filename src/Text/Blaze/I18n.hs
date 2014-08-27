@@ -40,8 +40,8 @@ class I18nType a where
 instance (PrintfArg a, I18nType r) => I18nType (a -> r) where
   spr_i18n fmt args = \a -> spr_i18n fmt (args ++ [toUPrintf a])
 
-instance I18nType (MarkupM ()) where
-  spr_i18n msgid args = customParent "blaze-html-i18n-tag" $ do
+instance I18nType (MarkupM a) where
+  spr_i18n msgid args = coerce $ customParent "blaze-html-i18n-tag" $ do
     customParent "msg-id" $ string msgid
     forM_ args $ \arg ->
       case arg of
