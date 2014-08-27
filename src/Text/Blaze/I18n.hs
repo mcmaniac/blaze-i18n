@@ -9,8 +9,9 @@ module Text.Blaze.I18n
   , localizeMarkup
   ) where
 
+import GHC.Prim
 import Data.Foldable as F
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 
 -- blaze package
 import Text.Blaze
